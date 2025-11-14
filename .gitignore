@@ -1,3 +1,4 @@
+*_py*
 *.csv
 *.pdf
-
+.DS_Store
