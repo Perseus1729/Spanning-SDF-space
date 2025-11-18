@@ -12,6 +12,34 @@ epsilon = 1e-8
 # 0. Panel construction
 # ----------------------------------------------------------------------
 
+def drop_cols_nan_over_25(df):
+    """
+    Drops all columns with >25% NaN frequency.
+    Returns:
+        df_clean   → dataframe after dropping columns
+        summary    → table of NaN count and % for all columns
+        dropped    → list of dropped columns
+    """
+
+    N = len(df)
+
+    summary = pd.DataFrame({
+        "column": df.columns,
+        "null_count": df.isna().sum().values,
+        "null_pct": (df.isna().sum().values / N) * 100
+    }).sort_values("null_pct", ascending=False).reset_index(drop=True)
+
+    # Columns to drop
+    dropped = summary[summary["null_pct"] > 25]["column"].tolist()
+
+    # Drop them
+    df_clean = df.drop(columns=dropped)
+
+    print(f"Dropping {len(dropped)} columns with >25% NaNs:")
+    print(dropped)
+
+    return df_clean, summary, dropped
+
 def build_panel_matrices(df, char_cols,
                          ret_col="ret",
                          id_col="permno",
@@ -345,7 +373,7 @@ def pca_truncate(F, K):
 # 6. Top-level pipeline: takes ONLY df, does everything else internally
 # ----------------------------------------------------------------------
 
-def run_kozak(df):
+def run_kozak(df1):
     """
     High-level helper:
       - assumes df has columns: permno, date, price, age, re/ret, plus chars
@@ -360,8 +388,11 @@ def run_kozak(df):
         "meta":        {dates, ids_list, X_list, F_ols_*, F_gls, ...}
       }
     """
-
-    df = df.copy()
+    df_clean, nan_summary, dropped_cols = drop_cols_nan_over_25(df1)
+    print("NaN summary after dropping columns >25% NaN:")
+    print(nan_summary)
+    print("Shape after dropping columns: ", dropped_cols)
+    df = df_clean.copy()
 
     # Rename if needed (same as notebook)
     if "re" in df.columns and "ret" not in df.columns:
@@ -407,7 +438,7 @@ def run_kozak(df):
     F_gls = compute_gls_factors_diagSigma_t(Z_list, X_list, Sigma_diag_list)
 
     # 5. SR^2 vs K (annualized: freq=12 for monthly data)
-    K_max = 55
+    K_max = 38
     freq = 12
     Ks = np.arange(2, K_max + 1)
 
@@ -466,16 +497,16 @@ def run_kozak(df):
     df_ols_sr2 = pd.DataFrame({
         "Unhedged":  ols_unhedged_sr2,
         "Hedged 1x": ols_h1_sr2,
-        "Hedged 2x": ols_h2_sr2,
-        "Hedged 3x": ols_h3_sr2,
+        # "Hedged 2x": ols_h2_sr2,
+        # "Hedged 3x": ols_h3_sr2,
         "GLS (pca)": ols_gls_sr2,
     }, index=Ks)
 
     df_uni_sr2 = pd.DataFrame({
         "Unhedged":  uni_unhedged_sr2,
         "Hedged 1x": uni_h1_sr2,
-        "Hedged 2x": uni_h2_sr2,
-        "Hedged 3x": uni_h3_sr2,
+        # "Hedged 2x": uni_h2_sr2,
+        # "Hedged 3x": uni_h3_sr2,
         "GLS (pca)": uni_gls_sr2,
     }, index=Ks)
 
